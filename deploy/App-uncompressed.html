@@ -8,15 +8,168 @@
     <script type="text/javascript">
         Rally.onReady(function () {
                 Ext.define('CustomApp', {
-    extend: 'Rally.app.App',
-    componentCls: 'app',
-    launch: function() {
-        //Write app code here
+	extend: 'Rally.app.App',
+	componentCls: 'app',
+	allRecords: [],
+	launch: function (){
+		this._loadHLSData();
+	},
 
-        //API Docs: https://help.rallydev.com/apps/2.0/doc/
-    }
+	// Get data from Rally
+	_loadHLSData: function() {
+		this.hlsStore = Ext.create('Rally.data.wsapi.Store', {
+			model: 'PortfolioItem/HighLevelScope',
+			fetch: ['FormattedID', 'Name'],
+			autoLoad: true,
+			listeners: {
+				scope: this,
+				load: function(userStore, myData, success) {
+		            //process data
+		            console.log('HLS',myData);
+		            this.allRecords = this.allRecords.concat(myData);
+		            this._loadEpicData();
+		        }
+		    }
+		});
+	},
+
+	_loadEpicData: function() {
+		this.epicStore = Ext.create('Rally.data.wsapi.Store', {
+			model: 'PortfolioItem/Epic',
+			fetch: ['FormattedID', 'Name'],
+			autoLoad: true,
+			listeners: {
+				scope: this,
+				load: function(userStore, myData, success) {
+		            //process data
+		            console.log('Epic',myData);
+		            this.allRecords = this.allRecords.concat(myData);
+		            this._loadUserStoryData();
+		        }
+		    }
+		});
+	},
+
+	_loadUserStoryData: function() {
+		this.userStore = Ext.create('Rally.data.wsapi.Store', {
+			model: 'User Story',
+			autoLoad: true,
+			listeners: {
+				scope: this,
+				load: function(userStore, myData, success) {
+		            //process data
+		            console.log('User Story',myData);
+		            this.allRecords = this.allRecords.concat(myData);
+		            console.log('all data',this.allRecords);
+		            this._loadCardboard(userStore, this.hlsStore);
+		        }
+		    },
+		    fetch: ['FormattedID', 'Name']
+		});
+	},
+
+	// the cardboard
+	_loadCardboard: function(store, records) {
+		var initiativeColumns = [];
+
+		Ext.each(records, function(record) {
+			initiativeColumns.push({
+				xtype: 'rallycardboardcolumn',
+				columnHeaderConfig: {
+					xtype: 'rallycardboardcolumnheader',
+					fieldToDisplay: 'Name',
+					record: record,
+				},
+				cardConfig: {
+					xtype: 'rallycard',
+					record: 'PortfolioItem/Feature'
+				},
+				fields: ['Name', 'Parent'],
+				valueField: 'Parent',
+            	value: record.get('_ref') // BUG FIXED HERE.  Was: record.get('Parent')
+        	});
+		}, this);
+
+		var cardBoardConfig = {
+			xtype: 'rallycardboard',
+			types: ['PortfolioItem/Feature'],
+			columns: initiativeColumns,
+			attribute: 'Parent',
+		};
+		var cardBoard = this.add(cardBoardConfig);
+
+		console.log('cardboard', cardBoard);
+	},
+
+	// Create and show a grid
+	_loadGrid: function(myStoryStore) {
+		var myGrid = Ext.create('Rally.ui.grid.Grid', {
+			store: myStoryStore,
+			columnCfgs: [
+			'FormattedID', 'Name', 'ScheduleState']
+		});
+
+		console.log('my grid', myGrid);
+		this.add(myGrid);
+
+		// var myGrid = Ext.create('Ext.grid.Panel', {
+		//     store: myStoryStore,
+		//     width: 400,
+		//     height: 200,
+		//     title: 'Testing Grid Users',
+		//     columns: [
+		//         {
+		//             text: 'ID',
+		//             width: 100,
+		//             sortable: false,
+		//             hideable: false,
+		//             dataIndex: 'FormattedID'
+		//         },
+		//         {
+		//             text: 'Name',
+		//             width: 150,
+		//             dataIndex: 'Name',
+		//             hidden: false
+		//         },
+		//         {
+		//             text: 'SchedulevState',
+		//             flex: 1,
+		//             dataIndex: 'ScheduleState'
+		//         }
+		//     ]
+		// });
+
+this.add(myGrid);
+},
+
+_loadGridBoard: function(myStore) {
+	var myGridBoard = Ext.create('Ext.Container', {
+		items: [{
+			xtype: 'rallygridboard',
+			context: this.getContext(),
+			modelNames: ['userstory'],
+			toggleState: 'grid',
+			plugins: [
+			'rallygridboardtoggleable'
+			],
+			cardBoardConfig: {
+				attribute: 'ScheduleState'
+			},
+			gridConfig: {
+				store: myStore,
+				columnCfgs: ['FormattedID', 'Name', 'ScheduleState']
+			},
+			height: this.getHeight()
+		}]
+	});
+
+	this.add(myGridBoard);
+}
+
+
+
+
 });
-
 
             Rally.launchApp('CustomApp', {
                 name:"basicreallyapp",
